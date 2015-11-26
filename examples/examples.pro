@@ -80,5 +80,6 @@ contains(MNECPP_CONFIG, withGui) {
         stClusteredInversePwlRapMusic  \
         roiClusteredInversePwlRapMusic \
         fsSurface \
+        sspDev \
     }
 }
