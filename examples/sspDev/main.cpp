@@ -72,6 +72,137 @@
 //using namespace Eigen;
 
 
+
+
+//*************************************************************************************************************
+//=============================================================================================================
+// New Functions
+//=============================================================================================================
+
+//=============================================================================================================
+
+
+
+Eigen::MatrixXd generateColumn( const Eigen::MatrixXd& leftSvdMatrix, const Eigen::RowVectorXi& picks, FIFFLIB::fiff_int_t vectorSize, FIFFLIB::fiff_short_t currentProjectionIndex )
+{
+    //  TODO: Sollte auch als reiner Spaltenvektor gehen... klappt dann die conversation später?
+    Eigen::MatrixXd ret = Eigen::MatrixXd::Zero(vectorSize, 1);
+
+    FIFFLIB::fiff_int_t picksSize = picks.size();
+    if( picksSize != leftSvdMatrix.rows() )
+        std::cout << "ERROR: different dimensionality of picks and SVD-basis" << std::endl;     //  TODO: std::except benutzen
+    else
+    {
+        for( FIFFLIB::fiff_int_t picksIndex = 0; picksIndex != picksSize; ++picksIndex )
+        {
+
+            ret(picks[picksIndex], 0) = leftSvdMatrix(picksIndex, currentProjectionIndex );
+        }
+
+    //    std::cout << std::endl << ret << std::endl;
+
+    //    std::cin.ignore(std::cin.rdbuf()->in_avail());
+    //    std::cin.get();
+    }
+
+    return ret;
+}
+
+
+
+FIFFLIB::FiffNamedMatrix::SDPtr generateFiffProjData( const Eigen::MatrixXd& column, const QStringList& channelNames )
+{
+    FIFFLIB::FiffNamedMatrix::SDPtr ret = FIFFLIB::FiffNamedMatrix::SDPtr(new FIFFLIB::FiffNamedMatrix());
+
+    ret->nrow = column.rows();
+    ret->ncol = 1;
+    ret->row_names = channelNames;
+    ret->col_names.push_back("");         // TODO: set channel names as in generateFiffProj?
+    ret->data = column;
+
+    return ret;
+
+}
+
+
+/*  Old and Useless
+QStringList generateChannelnames(const FIFFLIB::FiffRawData& raw, const Eigen::RowVectorXi& picks)
+{
+    QStringList ret;
+    for( FIFFLIB::fiff_int_t i = 0; i != picks.cols(); ++i )
+    {
+        if(picks(i) < raw.info.ch_names.size())
+            ret.push_back( raw.info.ch_names.at(picks(i)));
+    }
+    return ret;
+}
+*/
+
+
+//  FUNCTION: GenerateFiffProj
+//  Set up a list of vectors to be filtered out
+//  Fill up projectionVectors with the wanted vectors.
+//  The wanted vectors are the ones of maximum impact in the test run.
+//  Maximum impact means they belong to the biggest singular values.
+//  Singular Values are ordered by decreasing size.
+//  Thus the first vectors of leftSvdMatrix are the wanted vectors.
+//
+//  TODO:   Use global constant, for #projectionvectors
+QList<FIFFLIB::FiffProj> generateFiffProj(const FIFFLIB::FiffRawData& raw, const Eigen::RowVectorXi& picks, const Eigen::MatrixXd& data, FIFFLIB::fiff_int_t numberOfProjections)
+{
+    QList<FIFFLIB::FiffProj> ret;   //  initialisation of return variable
+
+    //  Apply Singular Value Decomposition on data, to get the left orthogonal matrix
+    //
+    //  TODO: check for #projection vectors > #cols(U)
+    std::cout << "Computing singular value decomposition..." <<std::endl;
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(data, Eigen::ComputeThinU);
+    Eigen::MatrixXd leftSvdMatrix = svd.matrixU();
+
+
+    //  all projection vectors have equal channel names
+    //  channelNames will be accessed by generateFiffProjData
+    std::cout << "Fetching channel names..." << std::endl;
+    QStringList channelNames = raw.info.ch_names;
+
+    //Add the NumberOfProjections first colums of leftSvdMatrix to ret
+    std::cout << "Generating the SSP projection file..." << std::endl;
+    for( FIFFLIB::fiff_short_t  currentProjectionIndex = 0; currentProjectionIndex != numberOfProjections; ++currentProjectionIndex )
+    {
+        FIFFLIB::FiffProj retElement;
+
+        retElement.kind = 0;    //  kind of projection-vector = 0 means it is not specified
+        retElement.active = false;  //  active-flag can/should be activated manually later on
+
+        // TODO - add impact factor
+        retElement.desc = QString("%1. vector - impact = ").arg(currentProjectionIndex + 1);
+
+        Eigen::MatrixXd currentProjectionColumn = generateColumn( leftSvdMatrix, picks, channelNames.size(), currentProjectionIndex);
+
+        retElement.data = generateFiffProjData(currentProjectionColumn, channelNames);
+        ret.push_back(retElement);
+    }
+    return ret;
+}
+/*  Useless and Old
+Eigen::MatrixXd generateMatrixfromFiffProj( const QList<FIFFLIB::FiffProj>& Proj )
+{
+    Eigen::MatrixXd ret;
+    for (int j = 0; j != Proj.size(); ++j )
+    {
+        Eigen::MatrixXd temp = (Proj.at(j).data)->data;
+        for( int i = 0; i != temp.cols(); ++i )
+        {
+            ret(i, j) = temp(0,i);
+        }
+    }
+    return ret;
+}
+*/
+
+
+
+
 //*************************************************************************************************************
 //=============================================================================================================
 // MAIN
@@ -92,35 +223,20 @@ int main(int argc, char *argv[])
 
     //Warum MatrixXd - dynamische Größe ist nicht notwendig...
 
-    /*
-     * Unklarheit, Ausgabe der letzten Zeile fehlt
-     *
-    Eigen::MatrixXd testMatrix;
-    testMatrix.resize(3,3);
-    testMatrix.setZero();
-
-    testMatrix(0,0) = 3;
-    testMatrix(1,1) = 1;
-    testMatrix(2,2) = 5;
-
-    std::cout << testMatrix;
-    */
-
     //
     //  location of file to read
     //
     QFile t_fileRaw("./MNE-sample-data/MEG/sample/sample_audvis_raw.fif");
 
-    float from = 42.956f;
-    float to = 320.670f;
-
-    bool in_samples = false;
-
+    bool in_samples = true;
 
     //
     //   Setup for reading the raw data
     //
     FIFFLIB::FiffRawData raw(t_fileRaw);
+
+    FIFFLIB::fiff_int_t from = raw.first_samp;
+    FIFFLIB::fiff_int_t to = raw.last_samp;
 
     //
     //   Set up pick list: MEG  - bad channels
@@ -151,6 +267,7 @@ int main(int argc, char *argv[])
     else
         readSuccessful = raw.read_raw_segment_times(data, times, from, to, picks);
 
+    //  Print a message if reading wasn't successful
     if (!readSuccessful)
     {
         printf("Could not read raw segment.\n");
@@ -164,118 +281,79 @@ int main(int argc, char *argv[])
     std::cout << data.block(0,0,5,5) << std::endl;
 
 
-    //DELETE QString test = QString("v%1_%2").arg(0).arg(1);
+    //Just for memorizing the code QString test = QString("v%1_%2").arg(0).arg(1);
 
 
-    //  Apply Singular Value Decomposition on data, to get the left orthogonal matrix
-    //
-    //  TODO: check for #projection vectors > #cols(U)
-
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(data, Eigen::ComputeThinU);
-    Eigen::MatrixXd leftSvdMatrixU = svd.matrixU();
-
-    qDebug()<<"SVD calculated";
-    //  FUNCTION: GenerateFiffProj
-    //  Set up a list of vectors to be filtered out
-    //  Fill up projectionVectors with the wanted vectors.
-    //  The wanted vectors are the ones of maximum impact in the test run.
-    //  Maximum impact means they belong to the biggest singular values.
-    //  Singular Values are ordered by decreasing size.
-    //  Thus the first vectors of leftSvdMatrix are the wanted vectors.
-    //
-    //  TODO:   Use global constant, for #projectionvectors
-    //  Wie konstruiere ich einen FiffProj aus einer MatrixXd?
-
-    QList<FIFFLIB::FiffProj> projectionVectors;
-    //const FIFFLIB::fiff_int_t numberOfProjections = 10;
+    // Calculate the projection vectors via SVD and save them in the appropriate structure
+    const FIFFLIB::fiff_int_t numberOfProjections = 3;
+    QList<FIFFLIB::FiffProj> projectionVectors = generateFiffProj(raw, picks, data, numberOfProjections);
 
 
+    //raw.proj = generateMatrixfromFiffProj(projectionVectors);
+    //raw.info.projs = projectionVectors;
 
 
-    return a.exec();
-}
+    /****************************************************************************************************
+     ****************************************************************************************************
+     * Writing the new, raw file, for testing reasons
+     ****************************************************************************************************
+     ****************************************************************************************************
+     */
+        QFile t_fileOut("./MNE-sample-data/MEG/sample/test_output_with_new_projs.fif");
 
 
+        Eigen::RowVectorXd cals;
 
-Eigen::MatrixXd generateColumn( Eigen::MatrixXd leftSvdMatrix, FIFFLIB::fiff_short_t currentProjectionIndex )
-{
-    const FIFFLIB::fiff_int_t rowSize = leftSvdMatrix.rows();
-    Eigen::MatrixXd ret(rowSize, 1);
-    for( FIFFLIB::fiff_int_t rowIndex = 0; rowIndex != rowSize; ++rowIndex )
-    {
-        ret(rowIndex, 0) = leftSvdMatrix(rowIndex, currentProjectionIndex );
-    }
-
-    return ret;
-}
+        FIFFLIB::FiffStream::SPtr outfid = FIFFLIB::Fiff::start_writing_raw(t_fileOut,raw.info, cals/*, picks*/);
 
 
+        float quantum_sec = 10.0f;//read and write in 10 sec junks
+        FIFFLIB::fiff_int_t quantum = ceil(quantum_sec*raw.info.sfreq);
+        //
+        //   To read the whole file at once set
+        //
+        //quantum     = to - from + 1;
+        //
+        //
+        //   Read and write all the data
+        //
+        bool first_buffer = true;
 
-FIFFLIB::FiffNamedMatrix::SDPtr generateFiffProjData(  const Eigen::RowVectorXi& picks,
-                                                const Eigen::MatrixXd& column,
-                                                const QStringList& channelNames )
-{
-    FIFFLIB::FiffNamedMatrix::SDPtr ret = FIFFLIB::FiffNamedMatrix::SDPtr(new FIFFLIB::FiffNamedMatrix());
-
-    ret->nrow = picks.cols();    //  since picks contains all the used indices of the raw file
-    ret->ncol = 1;
-    ret->row_names = channelNames;
-    ret->col_names.push_back("");         // TODO: set channel names as in generateFiffProj?
-    ret->data = column;
-
-    return ret;
-
-}
+        FIFFLIB::fiff_int_t first, last;
 
 
+        for(first = from; first < to; first+=quantum)
+        {
+            last = first+quantum-1;
+            if (last > to)
+            {
+                last = to;
+            }
 
-QStringList generateChannelnames(const FIFFLIB::FiffRawData& raw, const Eigen::RowVectorXi& picks)
-{
-    QStringList ret;
-    for( FIFFLIB::fiff_int_t i = 0; i != picks.cols(); ++i )
-    {
-        if(picks(i) < raw.info.ch_names.size())
-            ret.push_back( raw.info.ch_names.at(picks(i)));
-    }
-    return ret;
-}
+            if (!raw.read_raw_segment(data,times,first,last/*,picks*/))
+            {
+                    printf("error during read_raw_segment\n");
+                    return -1;
+            }
+            //
+            //   You can add your own miracle here
+            //
+            printf("Writing...");
+            if (first_buffer)
+            {
+               if (first > 0)
+                   outfid->write_int(FIFF_FIRST_SAMPLE,&first);
+               first_buffer = false;
+            }
+            outfid->write_raw_buffer(data,cals);
+            printf("[done]\n");
+        }
 
+        outfid->finish_writing_raw();
 
+        printf("Finished\n");
 
-QList<FIFFLIB::FiffProj> generateFiffProj(const FIFFLIB::FiffRawData& raw, const Eigen::RowVectorXi& picks, const Eigen::MatrixXd& data, FIFFLIB::fiff_int_t numberOfProjections)
-{
-    QList<FIFFLIB::FiffProj> ret;   //  initialisation of return variable
-
-    //  Apply Singular Value Decomposition on data, to get the left orthogonal matrix
-    //
-    //  TODO: check for #projection vectors > #cols(U)
-    Eigen::JacobiSVD<Eigen::MatrixXd> svd(data, Eigen::ComputeThinU);
-    Eigen::MatrixXd leftSvdMatrix = svd.matrixU();
-
-    //  all projection vectors have equal channel names
-    //  channelNames will be accessed by generateFiffProjData
-    QStringList channelNames = generateChannelnames(raw, picks);
-
-    //Add the NumberOfProjections first colums of leftSvdMatrix to ret
-    for( FIFFLIB::fiff_short_t  currentProjectionIndex = 0;
-                                currentProjectionIndex != numberOfProjections;
-                                ++currentProjectionIndex )
-    {
-        FIFFLIB::FiffProj retElement;
-
-        retElement.kind = 0;    //  kind of projection-vector = 0 means it is not specified
-
-        retElement.active = false;  //  active-flag can/should be activated manually later on
-
-        // TODO - add impact factor
-        retElement.desc = QString("%1. vector - impact = ").arg(currentProjectionIndex + 1);
-
-        Eigen::MatrixXd currentProjectionColumn = generateColumn( leftSvdMatrix, currentProjectionIndex);
-
-        retElement.data = generateFiffProjData(picks, currentProjectionColumn, channelNames);
-        ret.push_back(retElement);
-    }
-    return ret;
+        return 0;//a.exec();
 }
 
 
