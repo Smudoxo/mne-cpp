@@ -152,7 +152,6 @@ bool FiffInfo::make_compensator(fiff_int_t from, fiff_int_t to, FiffCtfComp& ctf
 {
     MatrixXd C1, C2, comp_tmp;
 
-    qDebug() << "Todo add all need ctf variables.";
 //    if(ctf_comp.data)
 //        delete ctf_comp.data;
     ctf_comp.data->clear();
@@ -460,7 +459,7 @@ void FiffInfo::writeToStream(FiffStream* p_pStream)
         //    Scan numbers may have been messed up
         //
         chs[k].scanno = k+1;//+1 because
-        //chs[k].range  = 1.0f;//Why? -> cause its already calibrated through reading
+        chs[k].range  = 1.0f;//Why? -> cause its already calibrated through reading
         cals(0,k) = chs[k].cal; //ToDo whats going on with cals?
         p_pStream->write_ch_info(&chs[k]);
     }
