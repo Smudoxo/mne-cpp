@@ -123,6 +123,7 @@ FiffCov::FiffCov(const FiffCov &p_FiffCov)
 , nfree(p_FiffCov.nfree)
 , eig(p_FiffCov.eig)
 , eigvec(p_FiffCov.eigvec)
+, ch_class(p_FiffCov.ch_class)
 {
 
 }
@@ -149,6 +150,7 @@ void FiffCov::clear()
     nfree = -1;
     eig = VectorXd();
     eigvec = MatrixXd();
+    ch_class.clear();
 }
 
 

@@ -214,6 +214,8 @@ public:
     fiff_int_t nfree;       /**< Number of degrees of freedom. */
     VectorXd eig;           /**< Vector of eigenvalues. */
     MatrixXd eigvec;        /**< Matrix of eigenvectors (each row represents an eigenvector). */
+    QList<int> ch_class;    /**< What kind of sensor EEG, MEG, etc. - ToDo: update the constructors and whole cpp-file, so far this only works in the example file */
+    /**< This is necessary fo the SSP computation in the style of Mattis Code */
 };
 
 
