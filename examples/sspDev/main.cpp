@@ -88,6 +88,7 @@
 
 Eigen::MatrixXd generateProjectionVector( const Eigen::MatrixXd& leftSvdMatrix, const Eigen::RowVectorXi& picks, FIFFLIB::fiff_short_t currentProjectionIndex )
 {
+    std::cout << "picks.size() = " << picks.size() << " vs. cov.data.rows() = " << leftSvdMatrix.rows() << std::endl;
      const FIFFLIB::fiff_int_t picksSize = picks.cols();
      if( picksSize != leftSvdMatrix.rows() )
          std::cout << "WARNING: different dimensionality of channels and Singular value basis" << std::endl;
@@ -125,7 +126,7 @@ FIFFLIB::FiffNamedMatrix::SDPtr generateFiffProjData( const Eigen::MatrixXd& row
 //  The wanted vectors are the ones of maximum impact in the test run.
 //  Maximum impact means they belong to the biggest singular values.
 //  Singular Values are ordered by decreasing size.
-//  Thus the first vectors of leftSvdMatrix are the wanted vectors.
+//  Thus the first vectors of leftSvdMatrix are the wanted 0vectors.
 //
 //  TODO:   Use global constant, for #projectionvectors
 QList<FIFFLIB::FiffProj> generateFiffProj(const FIFFLIB::FiffRawData& raw, const Eigen::RowVectorXi& picks, const Eigen::MatrixXd& data, FIFFLIB::fiff_short_t numberOfProjections)
@@ -211,7 +212,7 @@ QStringList createChannelSelection_Matti( const FIFFLIB::FiffCov& cov, FIFFLIB::
         if (cov.ch_class[k] == ch_class)
         {
             //  ToDo: for speed increase - sort bads and use binary search
-            if (!cov.bads.contains(cov.names[k]))
+            if (!cov.bads.contains(cov.names[k])  && cov.names[k] != "MEG348")
             {
                 names.append(cov.names[k]);
             }
@@ -249,7 +250,7 @@ Eigen::RowVectorXi createChannelSelection_Thomas( const FIFFLIB::FiffCov& cov, F
     //  ToDo: switch check for chs[i].unit with check for chs[i].kind, if this is what kind describes
     for( int i = 0; i != cov.names.size(); ++i )
         //  ToDo: Check if condition <=> chs[i].unit == 112 && ...
-        if( cov.ch_class[i] == ch_class && !cov.bads.contains(cov.names[i]) )
+        if( cov.ch_class[i] == ch_class && !cov.bads.contains(cov.names[i]) && cov.names[i] != "MEG348" )
         {
             picks[k] = i;
             ++k;
@@ -360,12 +361,12 @@ Eigen::MatrixXd selectAppropriateChannels_Matti(const Eigen::MatrixXd& data,
 
 Eigen::MatrixXd selectAppropriateChannels_Thomas(const Eigen::MatrixXd& data, Eigen::RowVectorXi picks)
 {
-    Eigen::MatrixXd pickedData = Eigen::MatrixXd(picks.size(), data.cols());
+    Eigen::MatrixXd pickedData = Eigen::MatrixXd(picks.size(), picks.size());
     for( int i = 0; i != picks.size(); ++i )
     {
-        for( int j = 0; j != data.cols(); ++j )
+        for( int j = 0; j != picks.size(); ++j )
         {
-            pickedData(i,j) = data(picks[i],j);
+            pickedData(i,j) = data(picks[i],picks[j]);
         }
     }
 
@@ -373,10 +374,10 @@ Eigen::MatrixXd selectAppropriateChannels_Thomas(const Eigen::MatrixXd& data, Ei
 }
 
 /********************************************************************************************************
- * Function - cumpute_ssp_vectors
+ * Function - compute_ssp_vectors
  * Here everythin is added together
  *******************************************************************************************************/
- void  compute_ssp_vectors( FIFFLIB::FiffCov& cov,
+ QList<FIFFLIB::FiffProj> compute_ssp_vectors( FIFFLIB::FiffCov& cov,
                             QString tag,  //  ToDo: check if necessary, supposed to be used for labelling
                             FIFFLIB::fiff_int_t ch_class,
                             FIFFLIB::fiff_int_t ncomp,
@@ -449,7 +450,30 @@ Eigen::MatrixXd selectAppropriateChannels_Thomas(const Eigen::MatrixXd& data, Ei
 
     //  COMPUTE EIGENVALUE DECOMPOSITION
 
+    Eigen::JacobiSVD<Eigen::MatrixXd> svd(pickedData_Thomas, Eigen::ComputeThinU);
     //  Put Eigenvectors into a FIFF::Proj
+
+     QList<FIFFLIB::FiffProj> ret;
+    //Add the #NumberOfProjections first colums of leftSvdMatrix to ret
+    std::cout << "Generating the SSP projection file..." << std::flush;
+    for( FIFFLIB::fiff_short_t  currentProjectionIndex = 0; currentProjectionIndex != ncomp; ++currentProjectionIndex )
+    {
+        FIFFLIB::FiffProj retElement;
+
+        retElement.kind = 1;    //  kind of projection-vector = 0 means it is not specified
+        retElement.active = false;  //  active-flag can/should be activated manually later on
+
+        // TODO - add impact factor
+        retElement.desc = QString("%1. vector - impact = ").arg(currentProjectionIndex + 1);
+
+        Eigen::MatrixXd currentProjectionVector = generateProjectionVector( svd.matrixU(), picks_Thomas, currentProjectionIndex);
+
+        retElement.data = generateFiffProjData(currentProjectionVector, picks_Matti);
+        ret.push_back(retElement);
+    }
+    return ret;
+
+
 }
 
 
@@ -485,7 +509,7 @@ int main(int argc, char *argv[])
     // the {} are used to delete unnecessary data from the stack after this
     {
         //  location of the file that will be read
-        QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/151015_131148_4884471_Empty_room_raw.fif");
+        QFile t_fileEmptyRoom("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
         //QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
 
         bool in_samples = true;
@@ -536,7 +560,7 @@ int main(int argc, char *argv[])
         covarianceMatrix.diag = false;          //  ToDp: This is not thought through, this is just for testing
         covarianceMatrix.dim = data.rows();         /**< Dimension of the covariance (dim x dim). */
         covarianceMatrix.names = raw.info.ch_names;          /**< Channel names. */
-        covarianceMatrix.data = data * data.transpose();          /**< Covariance data */
+        covarianceMatrix.data = data;// * data.transpose();          /**< Covariance data */
         covarianceMatrix.projs.clear();              /**< List of available ssp projectors. */
         covarianceMatrix.bads = raw.info.bads;       /**< List of bad channels. */
         //fiff_int_t nfree;         //  ToDo: Check what this is needed for and what it is supposed to be
@@ -567,7 +591,7 @@ int main(int argc, char *argv[])
      * The reason could very possibly lie in the selection by chs[k].kind == ch_class
      ************************************************************************************************************************************************/
     //  ToDo: Ask Lorenz about channel 'MEG348' - it's not picked in mne_browse raw, but I see no reason for that...
-    compute_ssp_vectors( covarianceMatrix, "This is just a Test" , 1, 20, projNames /* ToDo:Delete projNames, when a working solution was found*/ );
+    projectionVectors = compute_ssp_vectors( covarianceMatrix, "This is just a Test", FIFFV_MEG_CH, 8, projNames /* ToDo:Delete projNames, when a working solution was found*/ );
 
     int temporaryStopper;
     std::cout << "Insert any number, to continue" << std::endl;
@@ -579,10 +603,10 @@ int main(int argc, char *argv[])
 
     //  locations of the file to read and where to write the new file
     //  QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/151015_151137_4884471_Spontaneous_raw.fif");
-    QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/151015_131148_4884471_Empty_room_raw.fif");
+    QFile t_fileIn("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
     //QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
 
-    QFile t_fileOut("./MNE-sample-data/MEG/test_data_ssp/ssp_output_spontaneous_with_new_projs_raw.fif");
+    QFile t_fileOut("C:/Users/loren/Desktop/ssp_output_spontaneous_with_new_projs_raw.fif");
 
     //
     //   Setup for reading the raw data
