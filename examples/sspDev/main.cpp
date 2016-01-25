@@ -450,6 +450,10 @@ Eigen::MatrixXd selectAppropriateChannels_Thomas(const Eigen::MatrixXd& data, Ei
 
     //  COMPUTE EIGENVALUE DECOMPOSITION
 
+    //  Mattis version does a cholesky decompositon of the picked data and a eigenvalue decomposition afterwards
+
+
+    //  ToDo: The following part is a dirty hack - write this more carefully
     Eigen::JacobiSVD<Eigen::MatrixXd> svd(pickedData_Thomas, Eigen::ComputeThinU);
     //  Put Eigenvectors into a FIFF::Proj
 
