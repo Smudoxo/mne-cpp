@@ -564,7 +564,9 @@ int main(int argc, char *argv[])
     // the {} are used to delete unnecessary data from the stack after this
     {
         //  location of the file that will be read
-        QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/151015_131148_4884471_Empty_room_raw.fif");
+        QFile t_fileEmptyRoom("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
+
+        //QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/151015_131148_4884471_Empty_room_raw.fif");
         //QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
 
         bool in_samples = true;
@@ -659,10 +661,12 @@ int main(int argc, char *argv[])
 
     //  locations of the file to read and where to write the new file
     //  QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/151015_151137_4884471_Spontaneous_raw.fif");
-    QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/151015_131148_4884471_Empty_room_raw.fif");
+    QFile t_fileIn("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
     //QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
 
-    QFile t_fileOut("./MNE-sample-data/MEG/test_data_ssp/ssp_output_spontaneous_with_new_projs_raw.fif");
+    QFile t_fileOut("C:/Users/loren/Desktop/ssp_output_spontaneous_with_new_projs_raw.fif");
+
+    //QFile t_fileOut("./MNE-sample-data/MEG/test_data_ssp/ssp_output_spontaneous_with_new_projs_raw.fif");
 
     //
     //   Setup for reading the raw data
