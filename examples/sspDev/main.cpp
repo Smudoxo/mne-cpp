@@ -64,6 +64,7 @@
 
 #include <Eigen/Core>
 #include <Eigen/SVD>
+#include <Eigen/Eigenvalues>
 
 
 //*************************************************************************************************************
@@ -507,6 +508,7 @@ QList<FIFFLIB::FiffProj> generateFiffProj( const FIFFLIB::FiffCov& cov, const Ei
 
     //Eigen::MatrixXd pickedData_Matti = selectAppropriateChannels_Matti(data, chs, picks_Matti);
     removeUnwantedChannels(cov, picks);
+    std::cout << cov.data.block(0,0,8,344) << std::endl;
 
     /*********************************************************************************************************************
      *  COMPUTE EIGENVALUE DECOMPOSITION
@@ -522,6 +524,22 @@ QList<FIFFLIB::FiffProj> generateFiffProj( const FIFFLIB::FiffCov& cov, const Ei
     std::cout << "Singular value basis of dimensionality "
               << leftOrthogonalMatrix.rows() << "x"
               << leftOrthogonalMatrix.cols() << std::endl;
+
+
+//    Eigen::EigenSolver<Eigen::MatrixXd> ces;
+//    ces.compute(cov.data);
+//    std::cout << "The eigenvalues of cov are:" << std::endl << ces.eigenvalues() << std::endl;
+//    std::cout << "The matrix of eigenvectors, V, is:" << std::endl << ces.eigenvectors() << std::endl << std::endl;
+
+    /*********************************************************************************************************************
+     * Test Eigenvectors
+     *******************************************************************************************************************/
+    std::cout << "Test the norms of the EVs:\n";
+    for( int it = 0; it != ncomp; ++it )
+    {
+        std::cout << leftOrthogonalMatrix.col(it).norm();
+    }
+    std::cout << std::endl;
 
     /***********************************************************************************************************************
      *  Put Eigenvectors into a FIFF::Proj
@@ -564,10 +582,9 @@ int main(int argc, char *argv[])
     // the {} are used to delete unnecessary data from the stack after this
     {
         //  location of the file that will be read
-        QFile t_fileEmptyRoom("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
-
+        //QFile t_fileEmptyRoom("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
         //QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/151015_131148_4884471_Empty_room_raw.fif");
-        //QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
+        QFile t_fileEmptyRoom("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
 
         bool in_samples = true;
 
@@ -617,7 +634,9 @@ int main(int argc, char *argv[])
         covarianceMatrix.diag = false;          //  ToDp: This is not thought through, this is just for testing
         covarianceMatrix.dim = data.rows();         /**< Dimension of the covariance (dim x dim). */
         covarianceMatrix.names = raw.info.ch_names;          /**< Channel names. */
-        covarianceMatrix.data = data * data.transpose();          /**< Covariance data */
+        Eigen::MatrixXd data_1 = data;
+        Eigen::MatrixXd data_2 = data.transpose();
+        covarianceMatrix.data = data_1 * data_2;          /**< Covariance data */
         covarianceMatrix.projs.clear();              /**< List of available ssp projectors. */
         covarianceMatrix.bads = raw.info.bads;       /**< List of bad channels. */
         //fiff_int_t nfree;         //  ToDo: Check what this is needed for and what it is supposed to be
@@ -648,7 +667,7 @@ int main(int argc, char *argv[])
      * The reason could very possibly lie in the selection by chs[k].kind == ch_class
      ************************************************************************************************************************************************/
     //  ToDo: Ask Lorenz about channel 'MEG348' - it's not picked in mne_browse raw, but I see no reason for that...
-    compute_ssp_vectors( covarianceMatrix, "This is just a Test" , 1, 8, projNames /* ToDo:Delete projNames, when a working solution was found*/ );
+    projectionVectors = compute_ssp_vectors( covarianceMatrix, "This is just a Test" , 1, 8, projNames /* ToDo:Delete projNames, when a working solution was found*/ );
 
     int temporaryStopper = 0;
     std::cout << "Insert any number, to continue" << std::endl;
@@ -661,12 +680,11 @@ int main(int argc, char *argv[])
 
     //  locations of the file to read and where to write the new file
     //  QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/151015_151137_4884471_Spontaneous_raw.fif");
-    QFile t_fileIn("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
-    //QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
+    //QFile t_fileIn("D:/SoersStation/Dokumente/Karriere/TU Ilmenau/Promotion/Projekte/NSF_ANR_BMBF - Computational Neuroscience/Patient data/4884471/151015_131148_4884471_Empty_room_raw.fif");
+    QFile t_fileIn("./MNE-sample-data/MEG/test_data_ssp/Empty_Room_new_raw.fif");
 
-    QFile t_fileOut("C:/Users/loren/Desktop/ssp_output_spontaneous_with_new_projs_raw.fif");
-
-    //QFile t_fileOut("./MNE-sample-data/MEG/test_data_ssp/ssp_output_spontaneous_with_new_projs_raw.fif");
+    //QFile t_fileOut("C:/Users/loren/Desktop/ssp_output_spontaneous_with_new_projs_raw.fif");
+    QFile t_fileOut("./MNE-sample-data/MEG/test_data_ssp/ssp_output_spontaneous_with_new_projs_raw.fif");
 
     //
     //   Setup for reading the raw data
